@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-shield-check"></i> Compliance Dashboard</h2>
+            <div>
+                {% if report %}
+                <a href="/compliance/export/pdf" class="btn btn-outline-danger me-2">
+                    <i class="bi bi-file-pdf"></i> Export Compliance Report
+                </a>
+                {% endif %}
+                <span class="badge bg-secondary">Based on latest scan</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not report %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-shield-x display-1 text-muted"></i>
+        <h4 class="mt-3">No Scan Data Available</h4>
+        <p class="text-muted">Run a health check scan first to see compliance results.</p>
+        <a href="/" class="btn btn-aws"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+    </div>
+</div>
+{% else %}
+
+<!-- Compliance Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted">CIS AWS Benchmark</h6>
+                <h2
+                    class="{{ 'text-success' if cis_score >= 70 else 'text-warning' if cis_score >= 50 else 'text-danger' }}">
+                    {{ cis_score }}%
+                </h2>
+                <div class="progress mt-2" style="height: 8px;">
+                    <div class="progress-bar {{ 'bg-success' if cis_score >= 70 else 'bg-warning' if cis_score >= 50 else 'bg-danger' }}"
+                        style="width: {{ cis_score }}%"></div>
+                </div>
+                <small class="text-muted">{{ cis_pass }} / {{ cis_total }} checks passed</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted">SOC 2 Readiness</h6>
+                <h2
+                    class="{{ 'text-success' if soc2_score >= 70 else 'text-warning' if soc2_score >= 50 else 'text-danger' }}">
+                    {{ soc2_score }}%
+                </h2>
+                <div class="progress mt-2" style="height: 8px;">
+                    <div class="progress-bar {{ 'bg-success' if soc2_score >= 70 else 'bg-warning' if soc2_score >= 50 else 'bg-danger' }}"
+                        style="width: {{ soc2_score }}%"></div>
+                </div>
+                <small class="text-muted">{{ soc2_pass }} / {{ soc2_total }} controls met</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted">HIPAA Alignment</h6>
+                <h2
+                    class="{{ 'text-success' if hipaa_score >= 70 else 'text-warning' if hipaa_score >= 50 else 'text-danger' }}">
+                    {{ hipaa_score }}%
+                </h2>
+                <div class="progress mt-2" style="height: 8px;">
+                    <div class="progress-bar {{ 'bg-success' if hipaa_score >= 70 else 'bg-warning' if hipaa_score >= 50 else 'bg-danger' }}"
+                        style="width: {{ hipaa_score }}%"></div>
+                </div>
+                <small class="text-muted">{{ hipaa_pass }} / {{ hipaa_total }} safeguards met</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CIS Benchmark Checklist -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-list-check"></i> CIS AWS Foundations Benchmark v1.5
+    </div>
+    <div class="card-body p-0">
+        {% for check in cis_checks %}
+        <div class="checklist-item">
+            <span class="checklist-icon">
+                {% if check.status == 'PASS' %}
+                <i class="bi bi-check-circle-fill compliance-pass"></i>
+                {% elif check.status == 'FAIL' %}
+                <i class="bi bi-x-circle-fill compliance-fail"></i>
+                {% else %}
+                <i class="bi bi-dash-circle-fill compliance-partial"></i>
+                {% endif %}
+            </span>
+            <div class="flex-grow-1">
+                <strong>{{ check.id }}</strong> — {{ check.title }}
+                {% if check.description %}
+                <br><small class="text-muted">{{ check.description }}</small>
+                {% endif %}
+            </div>
+            <span
+                class="badge {{ 'bg-success' if check.status == 'PASS' else 'bg-danger' if check.status == 'FAIL' else 'bg-warning text-dark' }}">
+                {{ check.status }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- SOC 2 Controls -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-building-check"></i> SOC 2 Trust Service Criteria
+    </div>
+    <div class="card-body p-0">
+        {% for check in soc2_checks %}
+        <div class="checklist-item">
+            <span class="checklist-icon">
+                {% if check.status == 'PASS' %}
+                <i class="bi bi-check-circle-fill compliance-pass"></i>
+                {% elif check.status == 'FAIL' %}
+                <i class="bi bi-x-circle-fill compliance-fail"></i>
+                {% else %}
+                <i class="bi bi-dash-circle-fill compliance-partial"></i>
+                {% endif %}
+            </span>
+            <div class="flex-grow-1">
+                <strong>{{ check.id }}</strong> — {{ check.title }}
+                {% if check.description %}
+                <br><small class="text-muted">{{ check.description }}</small>
+                {% endif %}
+            </div>
+            <span
+                class="badge {{ 'bg-success' if check.status == 'PASS' else 'bg-danger' if check.status == 'FAIL' else 'bg-warning text-dark' }}">
+                {{ check.status }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- HIPAA Safeguards -->
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-hospital"></i> HIPAA Technical Safeguards
+    </div>
+    <div class="card-body p-0">
+        {% for check in hipaa_checks %}
+        <div class="checklist-item">
+            <span class="checklist-icon">
+                {% if check.status == 'PASS' %}
+                <i class="bi bi-check-circle-fill compliance-pass"></i>
+                {% elif check.status == 'FAIL' %}
+                <i class="bi bi-x-circle-fill compliance-fail"></i>
+                {% else %}
+                <i class="bi bi-dash-circle-fill compliance-partial"></i>
+                {% endif %}
+            </span>
+            <div class="flex-grow-1">
+                <strong>{{ check.id }}</strong> — {{ check.title }}
+                {% if check.description %}
+                <br><small class="text-muted">{{ check.description }}</small>
+                {% endif %}
+            </div>
+            <span
+                class="badge {{ 'bg-success' if check.status == 'PASS' else 'bg-danger' if check.status == 'FAIL' else 'bg-warning text-dark' }}">
+                {{ check.status }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

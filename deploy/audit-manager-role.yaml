@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Audit Manager - Creates a read-only IAM Role for cross-account auditing'
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    Default: '508137168365'
+    Description: 'The AWS Account ID of the Audit Manager tool that will assume this role'
+  ExternalId:
+    Type: String
+    Default: ''
+    Description: 'Optional External ID for additional security (leave blank if not needed)'
+
+Conditions:
+  HasExternalId: !Not [!Equals [!Ref ExternalId, '']]
+
+Resources:
+  AuditManagerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'AuditManagerRole'
+      Description: 'Read-only role for AWS Audit Manager cross-account scanning'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition: !If
+              - HasExternalId
+              - StringEquals:
+                  'sts:ExternalId': !Ref ExternalId
+              - !Ref 'AWS::NoValue'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/SecurityAudit'
+        - 'arn:aws:iam::aws:policy/job-function/ViewOnlyAccess'
+        - 'arn:aws:iam::aws:policy/AWSBillingReadOnlyAccess'
+      Tags:
+        - Key: Purpose
+          Value: AuditManager
+        - Key: CreatedBy
+          Value: AuditManagerOnboarding
+
+Outputs:
+  RoleARN:
+    Description: 'The ARN of the Audit Manager Role - paste this in the Audit Manager dashboard'
+    Value: !GetAtt AuditManagerRole.Arn
+    Export:
+      Name: AuditManagerRoleARN
+  AccountId:
+    Description: 'Your AWS Account ID'
+    Value: !Ref 'AWS::AccountId'

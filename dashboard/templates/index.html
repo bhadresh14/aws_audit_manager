@@ -1,0 +1,682 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+            <div>
+                <button class="btn btn-outline-secondary me-2" onclick="showAddProfileModal()">
+                    <i class="bi bi-person-plus"></i> Add Profile
+                </button>
+                <button class="btn btn-aws" onclick="triggerScan()">
+                    <i class="bi bi-arrow-repeat"></i> Run New Scan
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards (always visible) -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="text-muted">Total Reports</h6>
+                <h3>{{ reports|length if reports else 0 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="text-muted">Latest Cost Estimate</h6>
+                <h3>${{ "%.2f"|format(reports[0].total_cost) if reports else "0.00" }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="text-muted">Critical Findings</h6>
+                <h3 class="critical">{{ reports[0].critical_findings if reports else 0 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h6 class="text-muted">Potential Savings</h6>
+                <h3 class="text-success">${{ "%.2f"|format(reports[0].optimization_savings) if reports else "0.00" }}
+                </h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if reports and reports|length > 0 %}
+<!-- Security Score Gauge + Cost Trend Chart -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-shield-check"></i> Security Score
+            </div>
+            <div class="card-body text-center">
+                <div class="gauge-container">
+                    <svg viewBox="0 0 160 90" width="160" height="90">
+                        <path class="gauge-bg" d="M 20 80 A 60 60 0 0 1 140 80"></path>
+                        <path class="gauge-fill" id="gaugeArc" d="M 20 80 A 60 60 0 0 1 140 80" stroke-dasharray="188.5"
+                            stroke-dashoffset="188.5"></path>
+                    </svg>
+                </div>
+                <div class="gauge-score" id="gaugeScore">--</div>
+                <div class="gauge-label">out of 100</div>
+                <div class="mt-2">
+                    <small id="gaugeStatus" class="badge bg-secondary">Calculating...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <i class="bi bi-graph-up"></i> Cost Trend (Last Scans)
+            </div>
+            <div class="card-body">
+                <canvas id="costTrendChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Comparison (if multiple reports) -->
+{% if reports|length >= 2 %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-arrow-left-right"></i> Scan Comparison (Latest vs Previous)
+    </div>
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-md-3">
+                <h6 class="text-muted">Cost Change</h6>
+                {% set cost_diff = reports[0].total_cost - reports[1].total_cost %}
+                <h4 class="{{ 'text-danger' if cost_diff > 0 else 'text-success' }}">
+                    {{ '+' if cost_diff > 0 else '' }}${{ "%.2f"|format(cost_diff) }}
+                </h4>
+                <small class="text-muted">
+                    {% if reports[1].total_cost > 0 %}
+                    {{ "%.1f"|format((cost_diff / reports[1].total_cost) * 100) }}%
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </small>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Security Findings Change</h6>
+                {% set sec_diff = reports[0].security_findings - reports[1].security_findings %}
+                <h4 class="{{ 'text-danger' if sec_diff > 0 else 'text-success' }}">
+                    {{ '+' if sec_diff > 0 else '' }}{{ sec_diff }}
+                </h4>
+                <small class="text-muted">findings</small>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Critical Change</h6>
+                {% set crit_diff = reports[0].critical_findings - reports[1].critical_findings %}
+                <h4 class="{{ 'text-danger' if crit_diff > 0 else 'text-success' }}">
+                    {{ '+' if crit_diff > 0 else '' }}{{ crit_diff }}
+                </h4>
+                <small class="text-muted">critical issues</small>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted">Savings Opportunity</h6>
+                {% set sav_diff = reports[0].optimization_savings - reports[1].optimization_savings %}
+                <h4 class="{{ 'text-success' if sav_diff > 0 else 'text-warning' }}">
+                    {{ '+' if sav_diff > 0 else '' }}${{ "%.2f"|format(sav_diff) }}
+                </h4>
+                <small class="text-muted">potential/mo</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Configured Profiles -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people"></i> Configured AWS Profiles</span>
+        <button class="btn btn-sm btn-outline-light" onclick="showAddProfileModal()">
+            <i class="bi bi-plus"></i> Add
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div id="profilesList" class="p-3 text-muted text-center">
+            <!-- Loading Skeleton -->
+            <div class="skeleton skeleton-text" style="width: 80%; margin: 0 auto;"></div>
+            <div class="skeleton skeleton-text" style="width: 60%; margin: 0 auto;"></div>
+        </div>
+    </div>
+</div>
+
+{% if reports %}
+<!-- Reports Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-file-earmark-text"></i> Health Check Reports</span>
+        {% if reports %}
+        <a href="/report/{{ reports[0].id }}/download/pdf" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-file-pdf"></i> Export PDF
+        </a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Region</th>
+                    <th>Monthly Cost</th>
+                    <th>Security</th>
+                    <th>Savings</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in reports %}
+                <tr class="report-row" onclick="window.location='/report/{{ report.id }}'">
+                    <td>
+                        <i class="bi bi-calendar"></i> {{ report.date_formatted }}
+                        {% if report.data_source == 'estimated' %}
+                        <span class="badge bg-warning text-dark">Estimated</span>
+                        {% endif %}
+                    </td>
+                    <td><code>{{ report.account_id }}</code></td>
+                    <td>{{ report.region }}</td>
+                    <td class="cost-badge">${{ "%.2f"|format(report.total_cost) }}</td>
+                    <td>
+                        {% if report.critical_findings > 0 %}
+                        <span class="badge bg-danger">{{ report.critical_findings }} Critical</span>
+                        {% endif %}
+                        <span class="badge bg-secondary">{{ report.security_findings }} Total</span>
+                    </td>
+                    <td class="text-success">${{ "%.2f"|format(report.optimization_savings) }}/mo</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a href="/report/{{ report.id }}" class="btn btn-outline-primary" title="View">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="/report/{{ report.id }}/html" class="btn btn-outline-secondary" title="HTML"
+                                target="_blank">
+                                <i class="bi bi-filetype-html"></i>
+                            </a>
+                            <a href="/report/{{ report.id }}/download/pdf" class="btn btn-outline-danger" title="PDF">
+                                <i class="bi bi-file-pdf"></i>
+                            </a>
+                            <button class="btn btn-outline-success" title="Email Report"
+                                onclick="event.stopPropagation(); showEmailModalFor('{{ report.id }}')">
+                                <i class="bi bi-envelope"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% else %}
+<!-- No Reports - Empty State -->
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-inbox display-1 text-muted"></i>
+        <h4 class="mt-3">No Reports Yet</h4>
+        <p class="text-muted">Add an AWS profile and run your first scan to see results here.</p>
+        <button class="btn btn-aws btn-lg" onclick="showScanModal()">
+            <i class="bi bi-play-circle"></i> Run First Scan
+        </button>
+    </div>
+</div>
+{% endif %}
+
+<!-- Scan Modal -->
+<div class="modal fade" id="scanModal" tabindex="-1" aria-labelledby="scanModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="scanModalLabel">
+                    <i class="bi bi-gear"></i> Run New Health Check
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="scanForm">
+                    <div class="mb-3">
+                        <label for="profileSelect" class="form-label">AWS Profile</label>
+                        <select class="form-select" id="profileSelect" name="profile">
+                            <option value="">Loading profiles...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="regionSelect" class="form-label">Region (Optional)</label>
+                        <select class="form-select" id="regionSelect" name="region">
+                            <option value="">Use profile default</option>
+                            <option value="all">🌍 All Regions (Full Account Scan)</option>
+                            <option value="us-east-1">US East (N. Virginia)</option>
+                            <option value="us-west-2">US West (Oregon)</option>
+                            <option value="eu-west-1">Europe (Ireland)</option>
+                            <option value="eu-central-1">Europe (Frankfurt)</option>
+                            <option value="ap-south-1">Asia Pacific (Mumbai)</option>
+                            <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                            <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                        </select>
+                    </div>
+                </form>
+                <div id="scanProgress" class="d-none">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 mb-0 text-muted" id="scanStatus">Starting scan...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="scanModalFooter">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-aws" onclick="startScan()">
+                    <i class="bi bi-play-circle"></i> Start Scan
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Complete Toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="scanToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i class="bi bi-check-circle text-success me-2"></i>
+            <strong class="me-auto">Scan Complete</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            Scan completed. <a href="#" onclick="location.reload()">Refresh</a> to see results.
+        </div>
+    </div>
+</div>
+
+<!-- Add Profile Modal -->
+<div class="modal fade" id="addProfileModal" tabindex="-1" aria-labelledby="addProfileModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addProfileModalLabel">
+                    <i class="bi bi-person-plus"></i> Add AWS Account
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addProfileForm">
+                    <div class="mb-3">
+                        <label for="newProfileName" class="form-label">Profile Name <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newProfileName" name="profile_name" required
+                            placeholder="e.g., production, staging, client-name">
+                    </div>
+                    <div class="mb-3">
+                        <label for="newRoleArn" class="form-label">IAM Role ARN <span
+                                class="text-danger">*</span></label>
+                        <input type="text" class="form-control font-monospace" id="newRoleArn" name="role_arn" required
+                            placeholder="arn:aws:iam::123456789012:role/AuditManagerRole">
+                        <div class="form-text">The IAM role in the target account that grants read-only audit access
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newExternalId" class="form-label">External ID (optional)</label>
+                        <input type="text" class="form-control font-monospace" id="newExternalId" name="external_id"
+                            placeholder="Optional security identifier">
+                        <div class="form-text">If the role's trust policy requires an External ID</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newRegion" class="form-label">Default Region</label>
+                        <select class="form-select" id="newRegion" name="region">
+                            <option value="ap-south-1" selected>Asia Pacific (Mumbai)</option>
+                            <option value="us-east-1">US East (N. Virginia)</option>
+                            <option value="us-west-2">US West (Oregon)</option>
+                            <option value="eu-west-1">Europe (Ireland)</option>
+                            <option value="eu-central-1">Europe (Frankfurt)</option>
+                            <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                            <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-info small mb-0">
+                        <i class="bi bi-shield-check"></i> <strong>Secure by design</strong> — No access keys stored.
+                        The role is assumed on each scan using temporary credentials that expire automatically.
+                    </div>
+                </form>
+                <div id="addProfileProgress" class="d-none">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 mb-0 text-muted" id="addProfileStatus">Validating role...</p>
+                    </div>
+                </div>
+                <div id="addProfileResult" class="d-none mt-3"></div>
+            </div>
+            <div class="modal-footer" id="addProfileModalFooter">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-aws" onclick="addProfile()">
+                    <i class="bi bi-plus-circle"></i> Add Account
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Email Report Modal -->
+<div class="modal fade" id="emailReportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-envelope"></i> Email Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Send this report (with PDF attached) to one or more email addresses.</p>
+                <div class="mb-3">
+                    <label class="form-label">Recipient Email(s) <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="dashEmailRecipients"
+                        placeholder="manager@company.com, cto@company.com">
+                    <div class="form-text">Separate multiple emails with commas</div>
+                </div>
+                <div id="dashEmailResult" class="d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-aws" id="dashEmailSendBtn" onclick="sendEmailFromDash()">
+                    <i class="bi bi-send"></i> Send
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let scanModal, scanToast, addProfileModal;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        scanModal = new bootstrap.Modal(document.getElementById('scanModal'));
+        scanToast = new bootstrap.Toast(document.getElementById('scanToast'));
+        addProfileModal = new bootstrap.Modal(document.getElementById('addProfileModal'));
+        loadProfiles();
+
+        {% if reports and reports | length > 0 %}
+        initSecurityGauge();
+        initCostTrendChart();
+        {% endif %}
+    });
+
+    // === Security Score Gauge ===
+    function initSecurityGauge() {
+        var totalFindings = {{ reports[0].security_findings if reports else 0 }
+    };
+    var criticalFindings = {{ reports[0].critical_findings if reports else 0 }};
+    var score = 100;
+    score -= criticalFindings * 15;
+    score -= (totalFindings - criticalFindings) * 3;
+    score = Math.max(0, Math.min(100, score));
+    var arc = document.getElementById('gaugeArc');
+    var scoreEl = document.getElementById('gaugeScore');
+    var statusEl = document.getElementById('gaugeStatus');
+    var offset = 188.5 - (188.5 * score / 100);
+    arc.style.strokeDashoffset = offset;
+    var color, status, statusClass;
+    if (score >= 80) { color = '#28a745'; status = 'Good'; statusClass = 'bg-success'; }
+    else if (score >= 60) { color = '#ffc107'; status = 'Fair'; statusClass = 'bg-warning text-dark'; }
+    else if (score >= 40) { color = '#fd7e14'; status = 'Poor'; statusClass = 'bg-warning text-dark'; }
+    else { color = '#dc3545'; status = 'Critical'; statusClass = 'bg-danger'; }
+    arc.style.stroke = color;
+    scoreEl.textContent = score;
+    scoreEl.style.color = color;
+    statusEl.textContent = status;
+    statusEl.className = 'badge ' + statusClass;
+    }
+
+    // === Cost Trend Chart ===
+    function initCostTrendChart() {
+        var reportsData = {{ reports| tojson
+    }};
+    var chartReports = reportsData.slice(0, 10).reverse();
+    var ctx = document.getElementById('costTrendChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartReports.map(function (r) { return r.date_formatted.split(' ')[0]; }),
+            datasets: [{
+                label: 'Monthly Cost ($)',
+                data: chartReports.map(function (r) { return r.total_cost; }),
+                borderColor: '#FF9900',
+                backgroundColor: 'rgba(255, 153, 0, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }, {
+                label: 'Potential Savings ($)',
+                data: chartReports.map(function (r) { return r.optimization_savings; }),
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.05)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                borderDash: [5, 5]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } },
+            scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return '$' + v.toFixed(0); } } } }
+        }
+    });
+    }
+
+    // === Profiles ===
+    async function loadProfiles() {
+        try {
+            const response = await fetch('/api/profiles');
+            const data = await response.json();
+
+            const select = document.getElementById('profileSelect');
+            select.innerHTML = '<option value="">Use default profile</option>';
+            data.profiles.forEach(profile => {
+                const option = document.createElement('option');
+                option.value = profile.name;
+                option.textContent = profile.name + (profile.account_id ? ` (${profile.account_id})` : '');
+                select.appendChild(option);
+            });
+
+            renderProfilesList(data.profiles);
+        } catch (error) {
+            console.error('Failed to load profiles:', error);
+            document.getElementById('profilesList').innerHTML = '<p class="text-muted mb-0">Failed to load profiles.</p>';
+        }
+    }
+
+    function renderProfilesList(profiles) {
+        const container = document.getElementById('profilesList');
+        if (profiles.length === 0) {
+            container.innerHTML = '<p class="text-muted mb-0">No profiles configured. Click "Add Profile" to get started.</p>';
+            return;
+        }
+        let html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Profile</th><th>Account ID</th><th>Region</th><th>Action</th></tr></thead><tbody>';
+        profiles.forEach(p => {
+            html += `<tr><td><strong>${p.name}</strong></td><td><code>${p.account_id || 'N/A'}</code></td><td>${p.region || 'N/A'}</td><td><button class="btn btn-sm btn-aws" onclick="quickScan('${p.name}')"><i class="bi bi-play-fill"></i> Scan</button></td></tr>`;
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    function quickScan(name) { showScanModal(); document.getElementById('profileSelect').value = name; }
+    function showScanModal() {
+        document.getElementById('scanForm').classList.remove('d-none');
+        document.getElementById('scanProgress').classList.add('d-none');
+        document.getElementById('scanModalFooter').classList.remove('d-none');
+        scanModal.show();
+    }
+    function triggerScan() { showScanModal(); }
+
+    async function startScan() {
+        const profile = document.getElementById('profileSelect').value;
+        const region = document.getElementById('regionSelect').value;
+        document.getElementById('scanForm').classList.add('d-none');
+        document.getElementById('scanProgress').classList.remove('d-none');
+        document.getElementById('scanModalFooter').classList.add('d-none');
+        try {
+            const params = new URLSearchParams();
+            if (profile) params.append('profile', profile);
+            if (region) params.append('region', region);
+            const response = await fetch('/api/scan' + (params.toString() ? '?' + params : ''), { method: 'POST' });
+            const data = await response.json();
+            if (data.status === 'started') {
+                document.getElementById('scanStatus').textContent = 'Scanning... This may take 1-2 minutes.';
+                pollForNewReport();
+            }
+        } catch (error) {
+            document.getElementById('scanStatus').textContent = 'Error: ' + error.message;
+            document.getElementById('scanStatus').classList.add('text-danger');
+        }
+    }
+
+    async function pollForNewReport() {
+        var initialCount = {{ reports| length if reports else 0
+    }};
+    var attempts = 0;
+    var interval = setInterval(async function () {
+        attempts++;
+        try {
+            var r = await fetch('/api/reports');
+            var d = await r.json();
+            if (d.count > initialCount) {
+                clearInterval(interval);
+                scanModal.hide();
+                scanToast.show();
+                setTimeout(function () { location.reload(); }, 2000);
+            } else if (attempts >= 60) {
+                clearInterval(interval);
+                document.getElementById('scanStatus').textContent = 'Taking longer than expected. Check back soon.';
+            } else {
+                document.getElementById('scanStatus').textContent = 'Scanning... (' + (attempts * 2) + 's)';
+            }
+        } catch (e) { }
+    }, 2000);
+    }
+
+    // === Email Report ===
+    var emailReportId = '';
+    function showEmailModalFor(reportId) {
+        emailReportId = reportId;
+        document.getElementById('dashEmailRecipients').value = '';
+        document.getElementById('dashEmailResult').classList.add('d-none');
+        document.getElementById('dashEmailSendBtn').disabled = false;
+        document.getElementById('dashEmailSendBtn').innerHTML = '<i class="bi bi-send"></i> Send';
+        new bootstrap.Modal(document.getElementById('emailReportModal')).show();
+    }
+
+    function sendEmailFromDash() {
+        var emails = document.getElementById('dashEmailRecipients').value.trim();
+        if (!emails) { showDashEmailResult('error', 'Enter at least one email.'); return; }
+        var emailList = emails.split(',').map(function (e) { return e.trim(); }).filter(function (e) { return e; });
+
+        document.getElementById('dashEmailSendBtn').disabled = true;
+        document.getElementById('dashEmailSendBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
+
+        fetch('/api/email/send-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ report_id: emailReportId, emails: emailList })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            document.getElementById('dashEmailSendBtn').disabled = false;
+            document.getElementById('dashEmailSendBtn').innerHTML = '<i class="bi bi-send"></i> Send';
+            if (data.status === 'sent') {
+                showDashEmailResult('success', 'Report sent to ' + emailList.join(', '));
+                setTimeout(function () { bootstrap.Modal.getInstance(document.getElementById('emailReportModal')).hide(); }, 2000);
+            } else {
+                showDashEmailResult('error', data.error || 'Failed to send.');
+            }
+        }).catch(function (e) {
+            document.getElementById('dashEmailSendBtn').disabled = false;
+            document.getElementById('dashEmailSendBtn').innerHTML = '<i class="bi bi-send"></i> Send';
+            showDashEmailResult('error', e.message);
+        });
+    }
+
+    function showDashEmailResult(type, msg) {
+        var el = document.getElementById('dashEmailResult');
+        el.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-danger');
+        el.innerHTML = '<i class="bi bi-' + (type === 'success' ? 'check-circle' : 'exclamation-triangle') + '"></i> ' + msg;
+        el.classList.remove('d-none');
+    }
+
+    // === Add Profile ===
+    function showAddProfileModal() {
+        document.getElementById('addProfileForm').reset();
+        document.getElementById('addProfileForm').classList.remove('d-none');
+        document.getElementById('addProfileProgress').classList.add('d-none');
+        document.getElementById('addProfileResult').classList.add('d-none');
+        document.getElementById('addProfileModalFooter').classList.remove('d-none');
+        addProfileModal.show();
+    }
+
+    async function addProfile() {
+        var profileName = document.getElementById('newProfileName').value.trim();
+        var roleArn = document.getElementById('newRoleArn').value.trim();
+        var externalId = document.getElementById('newExternalId').value.trim();
+        var region = document.getElementById('newRegion').value;
+
+        if (!profileName) { showProfileResult('error', 'Profile name is required'); return; }
+        if (!roleArn) { showProfileResult('error', 'Role ARN is required'); return; }
+        if (!roleArn.startsWith('arn:aws:iam::')) { showProfileResult('error', 'Invalid Role ARN format. Must start with arn:aws:iam::'); return; }
+
+        var body = { profile_name: profileName, auth_method: 'role_arn', role_arn: roleArn, region: region };
+        if (externalId) body.external_id = externalId;
+
+        document.getElementById('addProfileForm').classList.add('d-none');
+        document.getElementById('addProfileProgress').classList.remove('d-none');
+        document.getElementById('addProfileModalFooter').classList.add('d-none');
+
+        try {
+            var response = await fetch('/api/profiles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            var data = await response.json();
+            document.getElementById('addProfileProgress').classList.add('d-none');
+            if (response.ok && data.success) {
+                showProfileResult('success', 'Profile "' + profileName + '" added! Account: ' + (data.account_id || 'Unknown') + ' (' + (data.auth_method || '') + ')');
+                loadProfiles();
+                setTimeout(function () { addProfileModal.hide(); }, 2000);
+            } else {
+                showProfileResult('error', data.detail || 'Failed to add profile');
+                document.getElementById('addProfileForm').classList.remove('d-none');
+                document.getElementById('addProfileModalFooter').classList.remove('d-none');
+            }
+        } catch (error) {
+            document.getElementById('addProfileProgress').classList.add('d-none');
+            showProfileResult('error', 'Error: ' + error.message);
+            document.getElementById('addProfileForm').classList.remove('d-none');
+            document.getElementById('addProfileModalFooter').classList.remove('d-none');
+        }
+    }
+
+    function showProfileResult(type, msg) {
+        var el = document.getElementById('addProfileResult');
+        el.classList.remove('d-none', 'alert-success', 'alert-danger');
+        el.classList.add('alert', type === 'success' ? 'alert-success' : 'alert-danger');
+        el.innerHTML = '<i class="bi bi-' + (type === 'success' ? 'check-circle' : 'exclamation-triangle') + '"></i> ' + msg;
+    }
+</script>
+{% endblock %}

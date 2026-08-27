@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="bi bi-rocket-takeoff"></i> Connect Your AWS Account</h2>
+        <p class="text-muted">Follow these 3 simple steps to securely connect your AWS account for auditing.</p>
+    </div>
+</div>
+
+<!-- Step Progress -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="text-center flex-fill">
+                <div class="rounded-circle bg-warning text-white d-inline-flex align-items-center justify-content-center" style="width:36px;height:36px;" id="step1badge"><strong>1</strong></div>
+                <div class="small mt-1">Deploy Role</div>
+            </div>
+            <div class="flex-fill" style="height:2px;background:#dee2e6;margin-top:-10px;"></div>
+            <div class="text-center flex-fill">
+                <div class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center" style="width:36px;height:36px;" id="step2badge"><strong>2</strong></div>
+                <div class="small mt-1">Copy ARN</div>
+            </div>
+            <div class="flex-fill" style="height:2px;background:#dee2e6;margin-top:-10px;"></div>
+            <div class="text-center flex-fill">
+                <div class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center" style="width:36px;height:36px;" id="step3badge"><strong>3</strong></div>
+                <div class="small mt-1">Run Scan</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Step 1: Deploy CloudFormation -->
+<div class="card mb-4" id="step1">
+    <div class="card-header">
+        <i class="bi bi-1-circle"></i> <strong>Step 1:</strong> Deploy the Audit Role in Your AWS Account
+    </div>
+    <div class="card-body">
+        <p>Click the button below to deploy a read-only IAM Role in your AWS account. This role gives our tool permission to <strong>view</strong> your resources — it cannot make any changes.</p>
+        
+        <div class="alert alert-success">
+            <i class="bi bi-shield-check"></i> <strong>What gets created:</strong>
+            <ul class="mb-0 mt-2">
+                <li>An IAM Role named <code>AuditManagerRole</code></li>
+                <li>Read-only permissions (SecurityAudit + ReadOnlyAccess)</li>
+                <li>Trust policy allowing only account <code>{{ tool_account_id }}</code> to assume it</li>
+                <li><strong>No write access</strong> — we cannot modify your resources</li>
+            </ul>
+        </div>
+
+        <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?templateURL=https://audit-manager-templates.s3.ap-south-1.amazonaws.com/audit-manager-role.yaml&stackName=AuditManagerRole" 
+           target="_blank" class="btn btn-aws btn-lg">
+            <i class="bi bi-cloud-upload"></i> Launch in AWS Console
+        </a>
+        
+        <p class="mt-3 mb-1"><strong>Or deploy manually:</strong></p>
+        <div class="card bg-light">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong>CloudFormation Template</strong>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyTemplate()"><i class="bi bi-clipboard"></i> Copy</button>
+                </div>
+                <pre id="cfnTemplate" style="max-height:300px;overflow-y:auto;font-size:11px;background:#f8f9fa;padding:12px;border-radius:6px;white-space:pre-wrap;">{{ cfn_template }}</pre>
+            </div>
+        </div>
+
+        <button class="btn btn-aws mt-3" onclick="goToStep(2)">
+            I've deployed the template <i class="bi bi-arrow-right"></i>
+        </button>
+    </div>
+</div>
+
+<!-- Step 2: Copy the Role ARN -->
+<div class="card mb-4 d-none" id="step2">
+    <div class="card-header">
+        <i class="bi bi-2-circle"></i> <strong>Step 2:</strong> Copy the Role ARN
+    </div>
+    <div class="card-body">
+        <p>After the CloudFormation stack finishes (takes ~1 minute), find the Role ARN:</p>
+        <ol>
+            <li>Go to <a href="https://console.aws.amazon.com/cloudformation" target="_blank">AWS CloudFormation Console</a></li>
+            <li>Click the <strong>AuditManagerRole</strong> stack</li>
+            <li>Click the <strong>Outputs</strong> tab</li>
+            <li>Copy the <code>RoleARN</code> value</li>
+        </ol>
+        <p>It looks like: <code>arn:aws:iam::YOUR_ACCOUNT_ID:role/AuditManagerRole</code></p>
+
+        <div class="mb-3">
+            <label class="form-label"><strong>Paste your Role ARN here:</strong></label>
+            <input type="text" class="form-control font-monospace" id="onboardRoleArn" placeholder="arn:aws:iam::123456789012:role/AuditManagerRole">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Give this account a name:</label>
+            <input type="text" class="form-control" id="onboardProfileName" placeholder="e.g., production, staging, my-company">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Primary Region:</label>
+            <select class="form-select" id="onboardRegion">
+                <option value="ap-south-1">Asia Pacific (Mumbai)</option>
+                <option value="us-east-1">US East (N. Virginia)</option>
+                <option value="eu-central-1">Europe (Frankfurt)</option>
+                <option value="eu-west-1">Europe (Ireland)</option>
+                <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+            </select>
+        </div>
+
+        <button class="btn btn-aws" onclick="connectAccount()">
+            <i class="bi bi-link-45deg"></i> Connect Account
+        </button>
+        <div id="onboardResult" class="mt-3 d-none"></div>
+    </div>
+</div>
+
+<!-- Step 3: Run First Scan -->
+<div class="card mb-4 d-none" id="step3">
+    <div class="card-header">
+        <i class="bi bi-3-circle"></i> <strong>Step 3:</strong> Run Your First Scan
+    </div>
+    <div class="card-body text-center py-4">
+        <i class="bi bi-check-circle-fill text-success" style="font-size:48px;"></i>
+        <h4 class="mt-3 text-success">Account Connected!</h4>
+        <p>Your AWS account is now linked. Run your first audit scan to see your security, cost, and compliance results.</p>
+        <a href="/" class="btn btn-aws btn-lg">
+            <i class="bi bi-play-circle"></i> Go to Dashboard & Run Scan
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function goToStep(step) {
+        document.getElementById('step1').classList.add('d-none');
+        document.getElementById('step2').classList.add('d-none');
+        document.getElementById('step3').classList.add('d-none');
+        document.getElementById('step' + step).classList.remove('d-none');
+
+        for (var i = 1; i <= 3; i++) {
+            var badge = document.getElementById('step' + i + 'badge');
+            badge.classList.remove('bg-warning', 'bg-success');
+            badge.classList.add(i < step ? 'bg-success' : i === step ? 'bg-warning' : 'bg-secondary');
+        }
+    }
+
+    function copyTemplate() {
+        var text = document.getElementById('cfnTemplate').textContent;
+        navigator.clipboard.writeText(text).then(function() {
+            alert('Template copied to clipboard!');
+        });
+    }
+
+    async function connectAccount() {
+        var roleArn = document.getElementById('onboardRoleArn').value.trim();
+        var profileName = document.getElementById('onboardProfileName').value.trim();
+        var region = document.getElementById('onboardRegion').value;
+        var resultDiv = document.getElementById('onboardResult');
+
+        if (!roleArn || !profileName) {
+            resultDiv.className = 'mt-3 alert alert-danger';
+            resultDiv.textContent = 'Please fill in both the Role ARN and account name.';
+            resultDiv.classList.remove('d-none');
+            return;
+        }
+
+        resultDiv.className = 'mt-3 alert alert-info';
+        resultDiv.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div> Connecting...';
+        resultDiv.classList.remove('d-none');
+
+        try {
+            var response = await fetch('/api/profiles', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({profile_name: profileName, role_arn: roleArn, region: region})
+            });
+            var data = await response.json();
+
+            if (response.ok && data.success) {
+                resultDiv.className = 'mt-3 alert alert-success';
+                resultDiv.innerHTML = '<i class="bi bi-check-circle"></i> Connected! Account: ' + (data.account_id || 'Verified');
+                setTimeout(function() { goToStep(3); }, 1500);
+            } else {
+                resultDiv.className = 'mt-3 alert alert-danger';
+                resultDiv.textContent = data.detail || 'Failed to connect. Check the Role ARN and trust policy.';
+            }
+        } catch(e) {
+            resultDiv.className = 'mt-3 alert alert-danger';
+            resultDiv.textContent = 'Error: ' + e.message;
+        }
+    }
+</script>
+{% endblock %}
